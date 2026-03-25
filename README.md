@@ -23,6 +23,8 @@ Fully automated deployment of a production-ready **RKE2 Kubernetes cluster** on 
       │   worker1     │                        │   worker2     │
       │  10.0.0.214   │                        │  10.0.0.215   │
       │  workloads    │                        │  workloads    │
+      │  /dev/sdb 50G │                        │  /dev/sdb 50G │
+      │  (Longhorn)   │                        │  (Longhorn)   │
       └───────────────┘                        └───────────────┘
 
       ┌───────────────┐       MetalLB LB Range:
@@ -43,6 +45,7 @@ Fully automated deployment of a production-ready **RKE2 Kubernetes cluster** on 
 | **MetalLB** | Bare-metal LoadBalancer | v0.13.12 |
 | **cert-manager** | Automated TLS certificate management | v1.13.2 |
 | **Rancher** | Kubernetes management UI | latest |
+| **Longhorn** | Distributed block storage for Kubernetes | v1.7.2 |
 
 ## Prerequisites
 
@@ -83,7 +86,21 @@ The script will automatically:
 6. Deploy MetalLB with L2 advertisement
 7. Install Helm, cert-manager, and Rancher with Let's Encrypt TLS
 
-### 3. Access Rancher
+### 3. Install Longhorn Storage
+
+```bash
+scp longhorn.sh ubuntu@10.0.0.210:~/
+ssh ubuntu@10.0.0.210 'bash longhorn.sh'
+```
+
+The script will automatically:
+1. Verify worker nodes have the `longhorn=true` label
+2. Install storage dependencies (open-iscsi, nfs-common) on workers
+3. Format and mount the extra 50GB disk (`/dev/sdb`) on each worker at `/var/lib/longhorn`
+4. Install Longhorn via Helm, pinned to worker nodes only
+5. Verify all Longhorn pods are running
+
+### 4. Access Rancher
 
 Set up DNS: `rancher.example.com -> <MetalLB IP>` and open `https://rancher.example.com`.
 
@@ -108,6 +125,7 @@ terraform destroy
 ```
 .
 ├── rke2.sh                          # Main RKE2 cluster installer
+├── longhorn.sh                      # Longhorn storage installer (extra disk)
 ├── cleanup-rke2.sh                  # Cluster cleanup script
 ├── terraform/
 │   ├── main.tf                      # Provider config + cloud-init
@@ -125,6 +143,7 @@ terraform destroy
 - **Systemd timeout override**: `TimeoutStartSec=600` for RKE2 services since initial cluster join can take several minutes (image pulls, etcd sync).
 - **Inline manifests**: Kube-VIP, MetalLB IPAddressPool, and L2Advertisement are generated inline - no external template dependencies.
 - **Idempotent configuration**: Config files are truncated (not appended), PATH entries are guarded against duplication, and previous installations are cleaned before re-joining.
+- **Dedicated storage disks**: Workers get a separate 50GB disk (`/dev/sdb`) provisioned by Terraform, formatted and mounted by `longhorn.sh`. Longhorn is pinned to workers only via `nodeSelector` (`--set-string` to avoid Helm bool/string coercion).
 
 ## Configuration
 
@@ -140,6 +159,15 @@ Edit the variables section at the top of `rke2.sh`:
 | `certName` | SSH key filename | id_ed25519 |
 | `rancherHostname` | Rancher FQDN | rancher.example.com |
 | `letsencryptEmail` | Let's Encrypt email | admin@example.com |
+
+`longhorn.sh` variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `worker1-2` | Worker node IPs | 10.0.0.214-215 |
+| `longhorn_disk` | Extra disk device | /dev/sdb |
+| `longhorn_path` | Mount point for storage | /var/lib/longhorn |
+| `longhorn_version` | Longhorn Helm chart version | 1.7.2 |
 
 ## License
 
