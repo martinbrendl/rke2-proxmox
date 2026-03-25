@@ -1,6 +1,6 @@
 ############################################################
-#  PROVIDER KONFIGURACE
-#  Používáme bpg/proxmox - nejlépe udržovaný provider
+#  PROVIDER CONFIGURATION
+#  Using bpg/proxmox - best maintained provider
 ############################################################
 
 terraform {
@@ -26,14 +26,14 @@ provider "proxmox" {
 }
 
 ############################################################
-#  LOKÁLNÍ HODNOTY
+#  LOCAL VALUES
 ############################################################
 
 locals {
-  # Maska sítě pro cloud-init (prefix /24)
+  # Network mask for cloud-init (prefix /24)
   network_prefix = 24
 
-  # Cloud-init user-data společný pro všechny nody
+  # Cloud-init user-data shared across all nodes
   cloud_init_user_data = <<-EOT
     #cloud-config
     package_update: true
@@ -61,7 +61,7 @@ locals {
           - ${var.ssh_public_key}
   EOT
 
-  # Mapování všech nodů (pro outputs)
+  # Map of all nodes (for outputs)
   all_nodes = merge(
     { "admin" = var.admin_ip },
     { for i, ip in var.master_ips : "master${i + 1}" => ip },
