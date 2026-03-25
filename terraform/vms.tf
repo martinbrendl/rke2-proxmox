@@ -4,7 +4,7 @@
 
 resource "proxmox_virtual_environment_vm" "admin" {
   name        = "rke2-admin"
-  description = "RKE2 Admin node - spouští instalační skripty"
+  description = "RKE2 Admin node - runs installation scripts"
   tags        = ["rke2", "admin", "kubernetes"]
 
   node_name = var.proxmox_node
@@ -31,7 +31,7 @@ resource "proxmox_virtual_environment_vm" "admin" {
     dedicated = var.admin_memory
   }
 
-  # virtio-scsi-single je nutný pro iothread
+  # virtio-scsi-single is required for iothread
   scsi_hardware = "virtio-scsi-single"
 
   disk {
@@ -84,7 +84,7 @@ resource "proxmox_virtual_environment_file" "cloud_init_admin" {
 }
 
 ############################################################
-#  MASTER NODY (10.0.0.211-213)
+#  MASTER NODES (10.0.0.211-213)
 ############################################################
 
 resource "proxmox_virtual_environment_vm" "masters" {
@@ -172,7 +172,7 @@ resource "proxmox_virtual_environment_file" "cloud_init_masters" {
 }
 
 ############################################################
-#  WORKER NODY (10.0.0.214-215)
+#  WORKER NODES (10.0.0.214-215)
 ############################################################
 
 resource "proxmox_virtual_environment_vm" "workers" {
@@ -218,7 +218,7 @@ resource "proxmox_virtual_environment_vm" "workers" {
     file_format  = "raw"
   }
 
-  # Extra disk pro Longhorn storage
+  # Extra disk for Longhorn storage
   disk {
     datastore_id = var.datastore_id
     interface    = "scsi1"

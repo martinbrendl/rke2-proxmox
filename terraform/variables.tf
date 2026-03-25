@@ -1,32 +1,32 @@
 ############################################################
-#  PROMĚNNÉ - edituj terraform.tfvars                     #
+#  VARIABLES - edit terraform.tfvars                      #
 ############################################################
 
 variable "proxmox_endpoint" {
-  description = "URL Proxmox API, např. https://10.0.0.1:8006"
+  description = "Proxmox API URL, e.g. https://10.0.0.1:8006"
   type        = string
 }
 
 variable "proxmox_username" {
-  description = "Proxmox uživatel ve formátu user@realm, např. terraform@pve"
+  description = "Proxmox user in format user@realm, e.g. terraform@pve"
   type        = string
   default     = "terraform@pve"
 }
 
 variable "proxmox_api_token" {
-  description = "API token ve formátu terraform@pve!mytoken=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+  description = "API token in format terraform@pve!mytoken=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   type        = string
   sensitive   = true
 }
 
 variable "proxmox_node" {
-  description = "Název Proxmox nodu, na kterém se budou vytvářet VM"
+  description = "Proxmox node name where VMs will be created"
   type        = string
   default     = "pve"
 }
 
 variable "proxmox_insecure" {
-  description = "Přeskočit ověření TLS certifikátu (self-signed cert)"
+  description = "Skip TLS certificate verification (self-signed cert)"
   type        = bool
   default     = true
 }
@@ -36,41 +36,41 @@ variable "proxmox_insecure" {
 # ----------------------------------------------------------
 
 variable "template_id" {
-  description = "VM ID šablony (Ubuntu cloud-init template)"
+  description = "Template VM ID (Ubuntu cloud-init template)"
   type        = number
   default     = 9000
 }
 
 variable "datastore_id" {
-  description = "Proxmox datastore pro disky VM (local-lvm, ceph, atd.)"
+  description = "Proxmox datastore for VM disks (local-lvm, ceph, etc.)"
   type        = string
   default     = "local-lvm"
 }
 
 variable "iso_datastore_id" {
-  description = "Proxmox datastore pro cloud-init ISO"
+  description = "Proxmox datastore for cloud-init ISO"
   type        = string
   default     = "local"
 }
 
 # ----------------------------------------------------------
-# Síťová konfigurace
+# Network configuration
 # ----------------------------------------------------------
 
 variable "network_gateway" {
-  description = "Výchozí brána sítě"
+  description = "Default network gateway"
   type        = string
   default     = "10.0.0.1"
 }
 
 variable "network_bridge" {
-  description = "Proxmox síťový bridge"
+  description = "Proxmox network bridge"
   type        = string
   default     = "vmbr0"
 }
 
 variable "vlan_id" {
-  description = "VLAN tag (0 = bez VLANu)"
+  description = "VLAN tag (0 = no VLAN)"
   type        = number
   default     = 0
 }
@@ -82,32 +82,32 @@ variable "dns_server" {
 }
 
 variable "dns_domain" {
-  description = "DNS doménový suffix"
+  description = "DNS domain suffix"
   type        = string
   default     = "local"
 }
 
 # ----------------------------------------------------------
-# SSH klíč pro cloud-init
+# SSH key for cloud-init
 # ----------------------------------------------------------
 
 variable "ssh_public_key" {
-  description = "Obsah SSH veřejného klíče pro uživatele ubuntu"
+  description = "SSH public key content for ubuntu user"
   type        = string
 }
 
 variable "vm_user" {
-  description = "Uživatel na VM (musí odpovídat skriptu)"
+  description = "VM user (must match the script)"
   type        = string
   default     = "ubuntu"
 }
 
 # ----------------------------------------------------------
-# Konfigurace admin nodu
+# Admin node configuration
 # ----------------------------------------------------------
 
 variable "admin_ip" {
-  description = "IP adresa admin nodu"
+  description = "Admin node IP address"
   type        = string
   default     = "10.0.0.210"
 }
@@ -118,23 +118,23 @@ variable "admin_cpu" {
 }
 
 variable "admin_memory" {
-  description = "RAM v MB"
+  description = "RAM in MB"
   type        = number
   default     = 2048
 }
 
 variable "admin_disk_size" {
-  description = "Velikost disku v GB"
+  description = "Disk size in GB"
   type        = number
   default     = 20
 }
 
 # ----------------------------------------------------------
-# Konfigurace master nodů
+# Master nodes configuration
 # ----------------------------------------------------------
 
 variable "master_ips" {
-  description = "IP adresy master nodů (musí být 3)"
+  description = "Master node IP addresses (must be 3)"
   type        = list(string)
   default     = ["10.0.0.211", "10.0.0.212", "10.0.0.213"]
 }
@@ -145,23 +145,23 @@ variable "master_cpu" {
 }
 
 variable "master_memory" {
-  description = "RAM v MB"
+  description = "RAM in MB"
   type        = number
   default     = 4096
 }
 
 variable "master_disk_size" {
-  description = "Velikost disku v GB"
+  description = "Disk size in GB"
   type        = number
   default     = 50
 }
 
 # ----------------------------------------------------------
-# Konfigurace worker nodů
+# Worker nodes configuration
 # ----------------------------------------------------------
 
 variable "worker_ips" {
-  description = "IP adresy worker nodů"
+  description = "Worker node IP addresses"
   type        = list(string)
   default     = ["10.0.0.214", "10.0.0.215"]
 }
@@ -172,23 +172,23 @@ variable "worker_cpu" {
 }
 
 variable "worker_memory" {
-  description = "RAM v MB"
+  description = "RAM in MB"
   type        = number
   default     = 8192
 }
 
 variable "worker_disk_size" {
-  description = "Velikost disku v GB"
+  description = "Disk size in GB"
   type        = number
   default     = 100
 }
 
 # ----------------------------------------------------------
-# VM ID rozsah
+# VM ID range
 # ----------------------------------------------------------
 
 variable "vm_id_offset" {
-  description = "Počáteční VM ID (admin = offset, masters = offset+1..3, workers = offset+4..)"
+  description = "Starting VM ID (admin = offset, masters = offset+1..3, workers = offset+4..)"
   type        = number
   default     = 200
 }
