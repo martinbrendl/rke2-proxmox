@@ -57,10 +57,10 @@ lbrangeStop=10.0.0.230
 certName=id_ed25519
 
 # Rancher hostname (with Let's Encrypt SSL)
-rancherHostname=rancher.xbm.cz
+rancherHostname=rancher.example.com
 
 # Email for Let's Encrypt (required for certificate)
-letsencryptEmail=info@xbm.cz
+letsencryptEmail=info@example.com
 
 #############################################
 #            DO NOT EDIT BELOW              #
