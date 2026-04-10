@@ -8,7 +8,7 @@ Everything from [3-cluster](../3-cluster/), plus:
 
 | Component | Namespace | Purpose |
 |-----------|-----------|---------|
-| Pacman (or community choice) | `apps` | Sample app deployed via ArgoCD |
+| Podinfo | `apps` | Sample app deployed via ArgoCD |
 
 ## How It Works
 
@@ -16,7 +16,7 @@ The sample application is stored as Kubernetes manifests in `apps/`. ArgoCD watc
 
 ```
 apps/
-└── pacman/
+└── podinfo/
     ├── namespace.yaml
     ├── deployment.yaml
     └── service.yaml         # type: LoadBalancer → gets IP from Cilium LB-IPAM
@@ -49,7 +49,7 @@ Hubble UI:        http://10.0.0.222
 Forgejo:          http://10.0.0.223
 ArgoCD:           http://10.0.0.224
 Grafana:          http://10.0.0.225
-Pacman:           http://10.0.0.226
+Podinfo:          http://10.0.0.226
 ```
 
 ## Want to Suggest a Different Sample App?
