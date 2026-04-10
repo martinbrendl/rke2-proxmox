@@ -15,7 +15,7 @@ log_error() { echo -e "${RED}[ERROR] $1${NC}"; }
 echo -e "${CYAN}"
 echo '  ╔═══════════════════════════════════════════════════╗'
 echo '  ║   RKE2 HA Cluster + Rancher Automated Installer  ║'
-echo '  ║   Proxmox + Terraform + Kube-VIP + MetalLB       ║'
+echo '  ║   Proxmox + Terraform + Kube-VIP + Cilium CNI    ║'
 echo '  ║   github.com/martinbrendl/rke2-proxmox            ║'
 echo '  ╚═══════════════════════════════════════════════════╝'
 echo -e "${NC}"
@@ -49,8 +49,9 @@ workers=($worker1 $worker2)
 # All nodes array
 all=($master1 $master2 $master3 $worker1 $worker2)
 
-# MetalLB IP range for LoadBalancer services
-lbrange=10.0.0.221-10.0.0.230
+# Cilium LB-IPAM range (replaces MetalLB)
+lbrangeStart=10.0.0.221
+lbrangeStop=10.0.0.230
 
 # SSH key filename
 certName=id_ed25519
@@ -106,9 +107,9 @@ for node in "${all[@]}"; do
 done
 
 # ============================================================
-# STEP 1: Kube-VIP manifest + RKE2 config
+# STEP 1: Kube-VIP manifest + RKE2 config + Cilium config
 # ============================================================
-log_step "Step 1/10: Preparing Kube-VIP manifest and RKE2 config..."
+log_step "Step 1/9: Preparing Kube-VIP manifest, RKE2 config and Cilium config..."
 
 sudo mkdir -p /var/lib/rancher/rke2/server/manifests
 
@@ -174,9 +175,36 @@ spec:
 KUBEVIP
 sudo cp $HOME/kube-vip.yaml /var/lib/rancher/rke2/server/manifests/kube-vip.yaml
 
+# Generate Cilium HelmChartConfig (customizes the built-in RKE2 Cilium chart)
+cat > $HOME/rke2-cilium-config.yaml <<CILIUMCFG
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-cilium
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    kubeProxyReplacement: true
+    k8sServiceHost: "$master1"
+    k8sServicePort: 6443
+    hubble:
+      enabled: true
+      relay:
+        enabled: true
+      ui:
+        enabled: true
+    l2announcements:
+      enabled: true
+    externalIPs:
+      enabled: true
+    operator:
+      replicas: 1
+CILIUMCFG
+sudo cp $HOME/rke2-cilium-config.yaml /var/lib/rancher/rke2/server/manifests/rke2-cilium-config.yaml
+
 mkdir -p ~/.kube
 
-# Create RKE2 config (truncate - safe for repeated runs)
+# Create RKE2 config with Cilium CNI
 sudo mkdir -p /etc/rancher/rke2
 cat > config.yaml <<CONF
 node-name: master1
@@ -186,9 +214,11 @@ tls-san:
   - $master2
   - $master3
 write-kubeconfig-mode: "0644"
+cni: cilium
+disable-kube-proxy: true
 CONF
 sudo cp ~/config.yaml /etc/rancher/rke2/config.yaml
-log_info "Kube-VIP manifest and config.yaml ready"
+log_info "Kube-VIP manifest, Cilium config, and config.yaml ready"
 
 # Update PATH (idempotent - no duplicates)
 grep -qF '/var/lib/rancher/rke2/bin' ~/.bashrc || {
@@ -201,24 +231,26 @@ source ~/.bashrc
 # ============================================================
 # STEP 2: Copy files to all master nodes
 # ============================================================
-log_step "Step 2/10: Copying kube-vip.yaml, config and SSH keys to master nodes..."
+log_step "Step 2/9: Copying kube-vip.yaml, Cilium config, RKE2 config and SSH keys to master nodes..."
 
 for newnode in "${allmasters[@]}"; do
   log_info "  -> $newnode"
   scp -i ~/.ssh/$certName $HOME/kube-vip.yaml $user@$newnode:~/kube-vip.yaml
+  scp -i ~/.ssh/$certName $HOME/rke2-cilium-config.yaml $user@$newnode:~/rke2-cilium-config.yaml
   scp -i ~/.ssh/$certName $HOME/config.yaml $user@$newnode:~/config.yaml
   scp -i ~/.ssh/$certName ~/.ssh/{$certName,$certName.pub} $user@$newnode:~/.ssh
 done
 log_info "Files copied to all master nodes"
 
 # ============================================================
-# STEP 3: Instalace RKE2 na master1
+# STEP 3: Install RKE2 on master1
 # ============================================================
-log_step "Step 3/10: Installing RKE2 on master1 ($master1)... (this may take 2-5 minutes)"
+log_step "Step 3/9: Installing RKE2 + Cilium on master1 ($master1)... (this may take 3-8 minutes)"
 
 ssh -i ~/.ssh/$certName $user@$master1 "sudo bash" <<EOF
 mkdir -p /var/lib/rancher/rke2/server/manifests
 mv /home/$user/kube-vip.yaml /var/lib/rancher/rke2/server/manifests/kube-vip.yaml
+mv /home/$user/rke2-cilium-config.yaml /var/lib/rancher/rke2/server/manifests/rke2-cilium-config.yaml
 mkdir -p /etc/rancher/rke2
 mv /home/$user/config.yaml /etc/rancher/rke2/config.yaml
 grep -qF '/var/lib/rancher/rke2/bin' /home/$user/.bashrc || {
@@ -273,7 +305,7 @@ log_info "Master1 is Ready! Proceeding with master2/3 join..."
 # ============================================================
 # STEP 4: Configure kubectl on admin node
 # ============================================================
-log_step "Step 4/10: Configuring kubectl on admin node..."
+log_step "Step 4/9: Configuring kubectl on admin node..."
 
 token=$(cat token)
 sudo cat ~/.kube/rke2.yaml | sed 's/127.0.0.1/'$master1'/g' > $HOME/.kube/config
@@ -287,7 +319,7 @@ kubectl get nodes
 # ============================================================
 # STEP 5: Kube-VIP Cloud Provider
 # ============================================================
-log_step "Step 5/10: Installing Kube-VIP Cloud Provider..."
+log_step "Step 5/9: Installing Kube-VIP Cloud Provider..."
 
 kubectl apply -f https://kube-vip.io/manifests/rbac.yaml
 kubectl apply -f https://raw.githubusercontent.com/kube-vip/kube-vip-cloud-provider/main/manifest/kube-vip-cloud-controller.yaml
@@ -296,7 +328,7 @@ log_info "Kube-VIP Cloud Provider installed"
 # ============================================================
 # STEP 6: Join additional masters (master2, master3)
 # ============================================================
-log_step "Step 6/10: Joining additional master nodes..."
+log_step "Step 6/9: Joining additional master nodes..."
 
 masterindex=2
 for newnode in "${masters[@]}"; do
@@ -305,6 +337,8 @@ for newnode in "${masters[@]}"; do
   ssh -i ~/.ssh/$certName $user@$newnode "sudo bash" <<EOF
 /usr/local/bin/rke2-uninstall.sh 2>/dev/null || true
 rm -rf /etc/rancher /var/lib/rancher
+mkdir -p /var/lib/rancher/rke2/server/manifests
+cp /home/$user/rke2-cilium-config.yaml /var/lib/rancher/rke2/server/manifests/rke2-cilium-config.yaml
 mkdir -p /etc/rancher/rke2
 cat > /etc/rancher/rke2/config.yaml <<INNEREOF
 node-name: $nodename
@@ -315,6 +349,8 @@ tls-san:
   - $master1
   - $master2
   - $master3
+cni: cilium
+disable-kube-proxy: true
 INNEREOF
 curl -sfL https://get.rke2.io | sh -
 mkdir -p /etc/systemd/system/rke2-server.service.d
@@ -349,7 +385,7 @@ kubectl get nodes
 # ============================================================
 # STEP 7: Join worker nodes
 # ============================================================
-log_step "Step 7/10: Joining worker nodes..."
+log_step "Step 7/9: Joining worker nodes..."
 
 workerindex=1
 for newnode in "${workers[@]}"; do
@@ -385,51 +421,75 @@ log_info "Cluster state after joining workers:"
 kubectl get nodes
 
 # ============================================================
-# STEP 8: MetalLB
+# STEP 8: Cilium LB-IPAM + L2 Announcements (replaces MetalLB)
 # ============================================================
-log_step "Step 8/10: Installing MetalLB..."
+log_step "Step 8/9: Configuring Cilium LB-IPAM and L2 Announcements..."
 
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.12.1/manifests/namespace.yaml
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.12/config/manifests/metallb-native.yaml
+# Wait for Cilium to be fully running
+log_info "Waiting for Cilium pods to be ready..."
+attempt=0
+while true; do
+  attempt=$((attempt + 1))
+  ready_count=$(kubectl get pods -n kube-system -l app.kubernetes.io/name=cilium-agent --no-headers 2>/dev/null | grep -c "Running" || echo 0)
+  total_nodes=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+  if [ "$ready_count" -ge "$total_nodes" ] && [ "$total_nodes" -gt 0 ]; then
+    break
+  fi
+  if [ $attempt -gt 60 ]; then
+    log_warn "Cilium not fully ready after 5 minutes, continuing anyway..."
+    break
+  fi
+  echo -e "${YELLOW}  Attempt $attempt - Cilium agents ready: $ready_count/$total_nodes, waiting 5s...${NC}"
+  sleep 5
+done
+log_info "Cilium is running"
 
-# Generate MetalLB IPAddressPool (inline)
-cat > $HOME/ipAddressPool.yaml <<POOL
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
+# Wait for Cilium CRDs to be available
+log_info "Waiting for Cilium CRDs..."
+attempt=0
+while ! kubectl get crd ciliumloadbalancerippools.cilium.io &>/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [ $attempt -gt 60 ]; then
+    log_warn "CiliumLoadBalancerIPPool CRD not found after 300s, continuing..."
+    break
+  fi
+  echo -e "${YELLOW}  Attempt $attempt - waiting 5s for Cilium CRDs...${NC}"
+  sleep 5
+done
+
+# Apply Cilium LoadBalancer IP Pool (replaces MetalLB IPAddressPool)
+cat > $HOME/cilium-lb-ippool.yaml <<LBPOOL
+apiVersion: "cilium.io/v2"
+kind: CiliumLoadBalancerIPPool
 metadata:
   name: first-pool
-  namespace: metallb-system
 spec:
-  addresses:
-  - $lbrange
-POOL
+  blocks:
+    - start: "$lbrangeStart"
+      stop: "$lbrangeStop"
+LBPOOL
+kubectl apply -f $HOME/cilium-lb-ippool.yaml
 
-# ============================================================
-# STEP 9: MetalLB IP Pools + L2 Advertisement
-# ============================================================
-log_step "Step 9/10: Waiting for MetalLB controller and configuring IP Pools..."
-log_warn "This may take a while if container images are being pulled..."
-
-kubectl wait --namespace metallb-system \
-                --for=condition=ready pod \
-                --selector=component=controller \
-                --timeout=1800s
-kubectl apply -f ipAddressPool.yaml
-# Generate L2Advertisement (inline)
-cat > $HOME/l2Advertisement.yaml <<L2ADV
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
+# Apply Cilium L2 Announcement Policy (replaces MetalLB L2Advertisement)
+cat > $HOME/cilium-l2-policy.yaml <<L2POL
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumL2AnnouncementPolicy
 metadata:
-  name: example
-  namespace: metallb-system
-L2ADV
-kubectl apply -f $HOME/l2Advertisement.yaml
-log_info "MetalLB configured (IP range: $lbrange)"
+  name: l2-policy
+spec:
+  externalIPs: true
+  loadBalancerIPs: true
+  interfaces:
+    - ^eth[0-9]+
+L2POL
+kubectl apply -f $HOME/cilium-l2-policy.yaml
+
+log_info "Cilium LB-IPAM configured (IP range: $lbrangeStart - $lbrangeStop)"
 
 # ============================================================
-# STEP 10: Rancher + Cert-Manager + Helm
+# STEP 9: Rancher + Cert-Manager + Helm
 # ============================================================
-log_step "Step 10/10: Installing Helm, Cert-Manager and Rancher..."
+log_step "Step 9/9: Installing Helm, Cert-Manager and Rancher..."
 
 # Helm
 if ! command -v helm &> /dev/null; then
@@ -480,10 +540,20 @@ kubectl -n cattle-system get deploy rancher
 log_info "Creating Rancher LoadBalancer..."
 kubectl expose deployment rancher --name=rancher-lb --port=443 --type=LoadBalancer -n cattle-system 2>/dev/null || true
 
-log_info "Waiting for LoadBalancer IP assignment..."
+log_info "Waiting for LoadBalancer IP assignment (Cilium LB-IPAM)..."
 while [[ -z $(kubectl get svc rancher-lb -n cattle-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null) ]]; do
   sleep 5
-  echo -e "${YELLOW}  Waiting for MetalLB IP assignment...${NC}"
+  echo -e "${YELLOW}  Waiting for Cilium LB-IPAM IP assignment...${NC}"
+done
+
+# Hubble UI LoadBalancer
+log_info "Exposing Hubble UI via LoadBalancer..."
+kubectl expose deployment hubble-ui --name=hubble-ui-lb --port=80 --target-port=8081 --type=LoadBalancer -n kube-system 2>/dev/null || true
+
+log_info "Waiting for Hubble UI LoadBalancer IP..."
+while [[ -z $(kubectl get svc hubble-ui-lb -n kube-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null) ]]; do
+  sleep 5
+  echo -e "${YELLOW}  Waiting for Hubble UI LB IP assignment...${NC}"
 done
 
 # ============================================================
@@ -497,6 +567,16 @@ echo ""
 echo -e "${CYAN}Cluster nodes:${NC}"
 kubectl get nodes -o wide
 echo ""
+echo -e "${CYAN}Cilium status:${NC}"
+kubectl get pods -n kube-system -l app.kubernetes.io/name=cilium-agent -o wide
+echo ""
+echo -e "${CYAN}Hubble status:${NC}"
+kubectl get pods -n kube-system -l app.kubernetes.io/name=hubble-ui -o wide
+kubectl get pods -n kube-system -l app.kubernetes.io/name=hubble-relay -o wide
+echo ""
+echo -e "${CYAN}Cilium LB-IPAM pools:${NC}"
+kubectl get ciliumloadbalancerippool
+echo ""
 echo -e "${CYAN}Rancher services:${NC}"
 kubectl get svc -n cattle-system
 echo ""
@@ -505,4 +585,8 @@ echo -e "${GREEN}Rancher URL:  https://$rancherHostname${NC}"
 echo -e "${GREEN}Rancher LB IP: $RANCHER_IP${NC}"
 echo -e "${GREEN}Bootstrap password: admin${NC}"
 echo -e "${YELLOW}Don't forget to set DNS: $rancherHostname -> $RANCHER_IP${NC}"
+echo ""
+HUBBLE_IP=$(kubectl get svc hubble-ui-lb -n kube-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+echo -e "${CYAN}Hubble UI:${NC}"
+echo -e "${GREEN}  http://$HUBBLE_IP${NC}"
 echo ""
