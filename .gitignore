@@ -1,3 +1,6 @@
+# Local configuration with real values (never commit)
+config.env
+
 # Terraform
 terraform/.terraform/
 terraform/.terraform.lock.hcl

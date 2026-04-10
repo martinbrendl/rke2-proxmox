@@ -1,0 +1,48 @@
+############################################################
+#  TERRAFORM.TFVARS - EXAMPLE VALUES
+#  Copy to terraform.tfvars and fill in your values
+############################################################
+
+# --- Proxmox connection ---
+proxmox_endpoint  = "https://10.0.0.1:8006"
+proxmox_username  = "terraform@pve"
+proxmox_api_token = "terraform@pve!mytoken=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+proxmox_node      = "pve"
+proxmox_insecure  = true
+
+# --- Template ---
+template_id      = 9000
+datastore_id     = "local-lvm"
+iso_datastore_id = "local"
+
+# --- Network ---
+network_gateway = "10.0.0.1"
+network_bridge  = "vmbr0"
+vlan_id         = 0
+dns_server      = "8.8.8.8"
+dns_domain      = "local"
+
+# --- SSH key (cat ~/.ssh/id_ed25519.pub) ---
+ssh_public_key = "ssh-ed25519 AAAA... your-key-name"
+vm_user        = "ubuntu"
+
+# --- Admin node ---
+admin_ip        = "10.0.0.210"
+admin_cpu       = 2
+admin_memory    = 2048
+admin_disk_size = 20
+
+# --- Master nodes (3 for HA) ---
+master_ips       = ["10.0.0.211", "10.0.0.212", "10.0.0.213"]
+master_cpu       = 4
+master_memory    = 8192
+master_disk_size = 50
+
+# --- Worker nodes ---
+worker_ips       = ["10.0.0.214", "10.0.0.215"]
+worker_cpu       = 4
+worker_memory    = 8192
+worker_disk_size = 100
+
+# --- VM ID ---
+vm_id_offset = 8000
